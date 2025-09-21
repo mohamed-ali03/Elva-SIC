@@ -1,6 +1,6 @@
 """ Import Section """
 from adafruit.adafruit_dashboard import ElevatorDashboard
-from mqtt.mqtt_pubsub import MQTTPublisher ,MQTTSubscriber
+from mqtt.mqtt_pubsub import MQTTPublisher
 from camera.camera_module import SmartCamera
 
 from dcmotor.dcmotor import DCMotor
@@ -23,6 +23,7 @@ DHT_PIN = 6
 """ Threading Locks """
 desiredfloorsLock = threading.Lock()
 humidityTemperatureLock = threading.Lock()
+doorStatusLock = threading.Lock()
 """ Variable related to the motion of elevator """
 ultra = Ultrasonic(ULTRASONIC_TRIG_PIN,ULTRASONIC_ECHO_PIN)
 dcmotor = DCMotor(DCMOTOR_IN1_PIN,DCMOTOR_IN2_PIN)
@@ -35,13 +36,19 @@ currentfloor = 0                         # Start in the ground floor
 readingfloor = 0                         # Initiat the readingfloor by 0
 bufferreadingfloor = 0                   # to have access to the previous value of the reading floor number
 desiredfloors = [currentfloor]           # Set of the doors to reach
-
+doorstatus = "Closed"
 
 """ DHT Varaibles """
 dht = Adafruit_DHT.DHT22
 humidity = 0                             # Initial value of humidity
 temperature = 0                          # Initial value of temperature
 
+""" MQTT Variables"""
+mqttPUB = MQTTPublisher(topic="Elva-Status")
+mqttPUB.connect()
+
+""" Adafruit Varaibles """
+dashboard = ElevatorDashboard()
 
 """ Supperted Functions Section """
 def getDesiredDoorNumber(distance):
@@ -109,29 +116,36 @@ def moveElevator():
 
         dcmotor.stop()
 
+        
         time.sleep(5)
         servomotor.setServoAngle(90)              # Open the door
+        with doorStatusLock:
+            doorstatus = "Opened"
         time.sleep(15)
         servomotor.setServoAngle(0)               # Close the door
+        with doorStatusLock:
+            doorstatus = "Closed"
         time.sleep(5)
 
         with desiredfloorsLock :
             if desiredfloors[0] == currentfloor:
                 del desiredfloors[0]                      # shift list one step to the lift 
             currentfloor = desiredfloors[0] if desiredfloors else currentfloor
-              
-
-
 
 
 def getTempHumid():
     while True:
         with humidityTemperatureLock:
             humidity,temperature = Adafruit_DHT.read_retry(dht, dhtThread)
-        
-         
 
 
+def pubMQTTMasseg():
+    msg = f"Current Floor = {currentfloor}, Next Floor = {desiredfloors[1]} ,Temperature = {temperature} , Humidity = {humidity} , Door Status = {doorstatus}"
+    mqttPUB.publish(msg)
+
+def pubAdafruitDashboard():
+    dashboard.send_temp_humid(temperature,humidity)
+    dashboard.send_door_number(currentfloor)
 
 """ main Section """
 if __name__ == "__main__":
@@ -144,9 +158,15 @@ if __name__ == "__main__":
     dhtThread = threading.Thread(target=getTempHumid)
     dhtThread.start()
 
+    mqttThread = threading.Thread(target=pubMQTTMasseg)
+    mqttThread.start()
 
+    dashboardThread = threading.Thread(target=pubAdafruitDashboard)
+    dashboardThread.start()
 
 
     ultraThread.join()
     dhtThread.join()
     elevMoveThread.join()
+    mqttThread.join()
+    dashboardThread.join()
