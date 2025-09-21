@@ -13,10 +13,20 @@ import threading
 import time
 
 """ Global Varaible Section """
+""" PINS """
+ULTRASONIC_TRIG_PIN = 2
+ULTRASONIC_ECHO_PIN = 3
+DCMOTOR_IN1_PIN = 4
+DCMOTOR_IN2_PIN = 5
+SERVO_MOTOR_PIN = 13
+DHT_PIN = 6
+""" Threading Locks """
+desiredfloorsLock = threading.Lock()
+humidityTemperatureLock = threading.Lock()
 """ Variable related to the motion of elevator """
-ultra = Ultrasonic(2,3)
-dcmotor = DCMotor(4,5)
-servomotor = Servo(13)
+ultra = Ultrasonic(ULTRASONIC_TRIG_PIN,ULTRASONIC_ECHO_PIN)
+dcmotor = DCMotor(DCMOTOR_IN1_PIN,DCMOTOR_IN2_PIN)
+servomotor = Servo(SERVO_MOTOR_PIN)
 READING_TIME = 10                        # constant reading time to ensure that is not a wrong reading
 DURATION_BETWEEN_DOORS = 15              # time taken to move from one door to the next one
 NOT_A_READING = -1                       # constant for wrong reading status
@@ -25,7 +35,13 @@ currentfloor = 0                         # Start in the ground floor
 readingfloor = 0                         # Initiat the readingfloor by 0
 bufferreadingfloor = 0                   # to have access to the previous value of the reading floor number
 desiredfloors = [currentfloor]           # Set of the doors to reach
-desiredfloorsLock = threading.Lock()
+
+
+""" DHT Varaibles """
+dht = Adafruit_DHT.DHT22
+humidity = 0                             # Initial value of humidity
+temperature = 0                          # Initial value of temperature
+
 
 """ Supperted Functions Section """
 def getDesiredDoorNumber(distance):
@@ -39,7 +55,7 @@ def getDesiredDoorNumber(distance):
             return  4
     return None
 
-""" SubTasks Section """
+""" Thread Funcations Section """
 def getDoors():
     global desiredfloors
     while True:
@@ -109,7 +125,11 @@ def moveElevator():
 
 
 def getTempHumid():
-    pass
+    while True:
+        with humidityTemperatureLock:
+            humidity,temperature = Adafruit_DHT.read_retry(dht, dhtThread)
+        
+         
 
 
 
