@@ -2,6 +2,7 @@
 from adafruit.adafruit_dashboard import ElevatorDashboard
 from mqtt.mqtt_pubsub import MQTTPublisher
 from camera.camera_module import SmartCamera
+from camera import camerawithflask
 
 from dcmotor.dcmotor import DCMotor
 from servo.servo import Servo
@@ -167,6 +168,9 @@ if __name__ == "__main__":
 
     dashboardThread = threading.Thread(target=pubAdafruitDashboard)
     dashboardThread.start()
+
+    # run camera
+    camerawithflask.app.run(host='0.0.0.0', port=5000)
 
 
     ultraThread.join()
