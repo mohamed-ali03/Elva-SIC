@@ -8,7 +8,8 @@ from dcmotor.dcmotor import DCMotor
 from servo.servo import Servo
 
 from ultrasonic.ultrasonic import Ultrasonic
-import Adafruit_DHT
+import adafruit_dht
+import board
 
 import threading
 import time
@@ -33,11 +34,11 @@ READING_TIME = 10                        # constant reading time to ensure that 
 DURATION_BETWEEN_DOORS = 15              # time taken to move from one door to the next one
 NOT_A_READING = -1                       # constant for wrong reading status
 currentfloor = 0                         # Start in the ground floor
-desiredfloors = [currentfloor]           # Set of the doors to reach
+desiredfloors = [currentfloor,1,2,3,4]           # Set of the doors to reach
 doorstatus = "Closed"
 
 """ DHT Varaibles """
-dht = Adafruit_DHT.DHT22
+dhtDevice = adafruit_dht.DHT11(board.D6)
 humidity = 0                             # Initial value of humidity
 temperature = 0                          # Initial value of temperature
 
@@ -81,6 +82,7 @@ def getDoors():
                                                 # to avoid redundent floor number
             if readingfloor != NOT_A_READING and readingfloor not in desiredfloors:
                 with desiredfloorsLock:
+                    print(f"[ADDING FLOOR] {readingfloor}")
                     desiredfloors.append(readingfloor)
                     desiredfloors.sort()
                     
@@ -136,21 +138,25 @@ def getTempHumid():
     global humidity , temperature
     while True:
         with humidityTemperatureLock:
-            humidity,temperature = Adafruit_DHT.read_retry(dht, dhtThread)
+             temperature = dhtDevice.temperature
+             humidity = dhtDevice.humidity
         time.sleep(1)
 
 
 def pubMQTTMasseg():
-    while True :
-        msg = f"Current Floor = {currentfloor}, Next Floor = {desiredfloors[1]} ,Temperature = {temperature} , Humidity = {humidity} , Door Status = {doorstatus}"
-        mqttPUB.publish(msg)
-        time.sleep(1)
+    if len(desiredfloors) > 2:
+        while True :
+            msg = f"Current Floor = {currentfloor}, Next Floor = {desiredfloors[1]} ,Temperature = {temperature} , Humidity = {humidity} , Door Status = {doorstatus}"
+            mqttPUB.publish(msg)
+            time.sleep(1)
 
 def pubAdafruitDashboard():
-    while True:
-        dashboard.send_temp_humid(temperature,humidity)
-        dashboard.send_door_number(currentfloor)
-        time.sleep(1)
+    if len(desiredfloors) > 2:
+        while True:
+            dashboard.send_temp_humid(temperature,humidity)
+            dashboard.send_door_number(currentfloor)
+            dashboard.send_Next_Floors(desiredfloors)
+            time.sleep(1)
 
 """ main Section """
 if __name__ == "__main__":
